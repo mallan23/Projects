@@ -1,0 +1,121 @@
+---
+title: "Identifying the Biggest Predictors of a Country's Per Capita C02 Emissions"
+author: "Mitchell Allan"
+date: "2022-10-29"
+output: pdf_document
+header-includes:
+  \usepackage{fvextra}
+  \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE , warning=FALSE)
+```
+# Abstract
+The importance of identifying the underlying causes of C02 emissions can not be underestimated in the fight for a more sustainable future. The aim of this report is to perform a statistical analysis on the World Bank world development indicators data set and attempt to identify the predictors of C02 emissions per capita and the strength of their relationship. To do this, multiple linear regression was chosen with the least squares method, followed by a comparison of the lasso and ridge regression regularization techniques, all accompanied by K-fold cross-validation for model selection. This analysis was accompanied by plots of various types to assess the linearity of the relationship and to discuss the underlying assumptions. It was found that country's with densely urban populations, high energy use, and large amounts of energy production from non-renewable sources, are all strong contributors to their per capita C02 emissions. This analysis can help create discussions around the costs of using renewable sources of energy production, and whether people need to be  incentivised to live in less urban areas to decrease the density. 
+
+# Introduction
+Around the world governments and corporations are attempting to move to more sustainable solutions in all the biggest industries. Institutions are beginning to recognize the importance of the present in leading a future that can support a growing population. Possibly the most important factor in sustainability is energy production. Energy use and production is the backbone to any nation, and it can be argued that the status of a civilization is dependent on its ability to generate and distribute energy. As populations increase so does the demand for products and services, and with a society that has gradually expanded its reliance on technology to deliver these products and services, the energy demands increase alongside it. Therefore, increasing our percentage of energy production from more renewable sources can play an important role in increasing the sustainability of our future. Hence, it is of significant importance to identify contributing factors that influence a country’s per capita C02 emissions, as this information can be effective in helping governments find solutions to reduce their contribution to emissions and reliance on unsustainable sources of energy production. 
+
+# Data
+In order to meet the goal that is stated in the introduction, it is important to choose predictors that will give an accurate and reliable model, along with relevant conclusions. The World Bank data set has a very large amount of indicators and has plenty of detail [2]. Choosing all the predictors would result in a difficult to interpret model, in addition to possibly causing the model to suffer from the curse of dimensionality. So to prevent that, a certain set of predictors were chosen such that no important predictors are left out, and that the dimensions don't get too high. As a result the chosen predictors were; Access to electricity (% of population), Population in urban agglomerations of more than 1 million (% of total population), Terrestrial protected areas (% of total land area), Ease of doing business index (1=most business-friendly regulations), Poverty headcount ratio at $1.90 a day (2011 PPP) (% of population), Population, total, Urban population (% of total population), Energy use (kg of oil equivalent per capita), and the sum of Electricity production from non-renewable sources (% of total). The reason these specific predictors were chosen is that the inclusion of them all covers the most important aspects of the data. Energy use, poverty, population stats, and non-renewable energy production are all important factors of a country that may influence their C02 emissions. 
+
+There was no metric that showed electricity production from non-renewable sources as a total, but instead it showed the percentage of each separate method of production. To get the sum, an extra column was added and named "sum", this will be used to indicate the Electricity production from non-renewable sources (% of total). The predictor will be CO2 emissions (metric tons per capita), the per capita option was chosen as any other option would not be as relevant to our goals. The total emissions of a country would almost certainly be mostly attributed to the size of its population and its demands, that is why on a per capita basis we can compare factors on a more even playing field. 
+
+# Methods
+
+## Overview
+As a disclosure, this section is designed to simply state the method and the steps that were undertaken, there is no evaluation or discussion of the results given in the output. The discussion of the output is in the next section. Based on the goal of this report which is not to make classifications but to create a model that explains the relationship between the predictors and the response, regression is the chosen statistical technique. Specifically, multiple linear regression using both least squares to fit the coefficients, and using the lasso as a method of regularization of the coefficients and possible variable selection where necessary. The ridge regression technique will also be used with the corresponding coefficient estimates to be compared with the lasso. For each model, the use of K-fold cross-validation will be used for model selection, with K taking the value of 10 -- a common choice for K as it generally gives an ideal balance between variance and bias [1]. In addition to this, the potential issues of non-linearity, non-constant error variance, outliers and high leverage points will be tested with residual plots and other graphs. 
+## Implementation 
+The initial steps of implementation involved importing the data from the csv file, creating the sum column which contains the total percentage of electricity production from non-renewable sources, and finally creating another data frame that only consists of the variables that we are interested in. 
+```{r}
+data = read.csv("~/0STAT2020/A4/wbcc_bc-1.csv")
+data$sum <- data$EG.ELC.COAL.ZS+data$EG.ELC.PETR.ZS+data$EG.ELC.NGAS.ZS+data$EG.ELC.NUCL.ZS
+dataSubset <- subset(data, select = c(EN.ATM.CO2E.PC,EG.ELC.ACCS.ZS,EN.URB.MCTY.TL.ZS,ER.LND.PTLD.ZS,
+IC.BUS.EASE.XQ,SI.POV.DDAY,SP.POP.TOTL,SP.URB.TOTL.IN.ZS,EG.USE.PCAP.KG.OE,sum))
+```
+### Least Squares 
+For the implementation of the least squares linear regression model, the first step was to set a random seed so the result is repeatable. Then a variable is created that stores the cross-validation parameters, with a K of 10. The model is then trained with the output evaluated below. Once this output was obtained it seemed suitable to create a plot to view the linearity for each predictor that appears to have a statistically significant relationship with the response. Figure 1, Figure 2, Figure 3 and Figure 4 in the appendices show these graphs, in addition to the Figure 5 which shows the residual plot. 
+```{r, echo=FALSE, message = FALSE}
+library(caret)
+library(regclass)
+```
+```{r output1, fig.cap="This is the text caption under the figure"}
+set.seed(1)
+train.control <- trainControl(method = "cv", number = 10)
+cv.model <- train(EN.ATM.CO2E.PC~., data = dataSubset, method = "lm", trControl = train.control, na.action = na.omit )
+summary(cv.model)
+print(cv.model)
+```
+### Lasso and Ridge Regression
+The lasso method was a little less straightforward. In order to use the glmnet function to create the lasso model, there needed to be no NA values in the data set. This would mean either removing the NA values, or replacing them. Removing them could result in increased bias, and replacing with a constant could also result in increasing bias. So a method of imputation was used to replace the NA values with specific data that would appear as if they were from the original spread of data points. A set of 5 data sets were created with imputed data, one was chosen and then a matrix of the predictor variables was created to be passed into the lasso function. The plots of the corresponding mean squared error's (MSE) for each model that was found during cross validation and is shown in Figure 6 in the appendices. The left line indicates the model with the lowest MSE and the right one shows the largest MSE that is not above 1 standard deviation from the minimum. This latter one is the model that is chosen by the function for calculating the coefficients, which are then shown below, followed by the MSE of the model. The exact same steps were taken for the ridge regression model, with its corresponding coefficient estimates below the lasso and Figure 7 in appendices showing the plot of errors.
+```{r include=FALSE}
+library(mice)
+library(glmnet)
+```
+```{r results='hide'}
+imputed_Data <- mice(dataSubset, m=5, maxit = 50, method = 'cart', seed = 500)
+completeData <- complete(imputed_Data,2)
+```
+```{r}
+X <- model.matrix(EN.ATM.CO2E.PC~., data = completeData)
+X <- X[,-1]
+Y <- completeData$EN.ATM.CO2E.PC
+
+cv_lasso = cv.glmnet(X,Y,alpha=1)
+coef(cv_lasso)
+min(cv_lasso$cvm)
+
+cv_ridge = cv.glmnet(X,Y,alpha=0)
+coef(cv_ridge)
+min(cv_ridge$cvm)
+```
+# Results and Discussion 
+The first model that is fitted is a cross-validated least squares linear regression model. From the model, we see that Population in urban agglomerations of more than 1 million (% of total population), Urban population (% of total population), Energy use (kg of oil equivalent per capita), and Electricity production from non-renewable sources, appear to have a statistically significant relationship due the sufficiently low p-values. To test whether this relationship is linear, we can review the plots of each significant predictor against the response, then view the plot of the residuals. Figure 1, 2, 3 and 4 in the appendices show that it is difficult to make a decision about the linearity. The plots show roughly a linear relationship but the data points are fairly spread out, or densely packed into a single region which makes it difficult to tell the relationship. The plot of residuals show that there appears to be constant error variance, with residuals plotted uniformly around 0. As for linearity, there does appear to be slight non-linearity at the start, which is where the majority of the data resides, but does not indicate a strong enough non-linear relationship when taking into consideration the other factors. From the p-value, the R-squared, and reviewing the plots, it seems that there is a statistically significant linear relationship between Population in urban agglomerations of more than 1 million (% of total population), Urban population (% of total population), Energy use (kg of oil equivalent per capita) and Electricity production from non-renewable sources (% of total) with the CO2 emissions (metric tons per capita) of a country. 
+
+Now we move to the lasso model to regularize the coefficients and perform variable selection on the predictors that do not have a statistically significant relationship with the response. Due to there being NA's in the data set, this posed a problem in fitting the lasso regression model. The NA values needed to be replaced which now causes some questions to be raised about the accuracy of the coefficients and whether the model is suitable enough. This means that the data being modeled was not entirely representative of the original population and causes doubt to be cast over whether the coefficient estimates could be used for the final model. Comparing the coefficient values with the original linear model and we see that they have been shrunken a fair amount, quite similar to the ridge regression estimates. The ridge regression coefficient estimates appear to have been shrunken quite a fair amount, however, it does not perform variable selection, thus it suffers compared to the lasso model as it lacks the same interpretability. With slightly higher MSE, the ridge regression coefficients will not be chosen for the final model, and instead the lasso will be used. 
+
+Based on the outcomes of the analysis, it appears that urban populations are a strong indicator of a country's C02 emissions. Despite the inclusion of total population as a predictor, it did not have a significant relationship, this means that the population on its own does not dictate the per capita emissions of a country, but instead highlights the problems with dense urban populations. It would be interesting to perform an analysis on dense urban populations and their energy use, as their may be a more exponential relationship when populations are urbanized, as requirements for electricity would increase rapidly. 
+
+This seems to be the most important conclusion to draw from these results as the other two factors give less important insight into the matter. This is due to the fact that the more energy that a country uses per capita, and the higher their percentage of non-renewable sources of energy production, then it seems safe to assume that their per capita C02 emissions would increase alongside. This is what was seen in the analysis with the energy use indicator and non-renewable sources of energy production both having a relationship with the response. Further analysis would be required to see if there is possibly collinearity between these two predictors as it may be the case that a country prefers to use non-renewable sources of energy production to meet high demand, as this can give insight into the possible effectiveness or low cost of these forms of energy production. 
+
+# Conclusions 
+This analysis has flaws, and does not constitute as an accurate reflection of the information we hoped to gain in the introduction. Firstly, based on practical considerations not all variables were able to be tested for their relationship. This restriction meant that a subset had to be chosen that could accurately depict as much relevant information as possible. Along with this, there was quite a few NA's in the data which posed a problem for the regularization techniques, and resulted in extra data being swapped in place of these values. Unfortunately this meant that the data being modeled was not entirely representative of the original population and decision had to be made whether the original least squares estimations should be used instead. Finally, the possible appearance of collinearity within the data is a real possibility that needed to be tested. It is very likely that "Population in urban agglomerations of more than 1 million (% of total population)" and "Urban population (% of total population)" were linearly related and this would have an impact on the accuracy of the final model. 
+
+Despite these disadvantages the analysis itself gave way to some interesting insights and allows further in-depth investigations to take place. Densely populated urban populations appear to have high energy demands and country's will typically go to non-renewable sources of energy to meet these demands. This information allows country's to possibly entice citizens to live in more rural areas and may also make way for discussions around the costs and availability of renewable sources of energy production as opposed to non-renewable sources.  
+
+# References
+1. James, G., Witten, D., Hastie, T., & Tibshirani, R. (2021). An Introduction to Statistical Learning: with Applications in R (Springer Texts in Statistics) (2nd ed. 2021). Springer.
+2. World Development Indicators | DataBank. (n.d.). Retrieved October 30, 2022, from https://databank.worldbank.org/source/world-development-indicators
+
+# Apendicies
+```{r fig1,echo=FALSE, fig.cap="\\label{fig:fig1}Population in urban agglomerations of more than 1 million (% of total population)"}
+ggplot(dataSubset,aes(x=EN.URB.MCTY.TL.ZS,y=EN.ATM.CO2E.PC))+geom_point(shape=19)+geom_smooth(method="lm")
+```
+
+```{r fig2, echo=FALSE, fig.cap="\\label{fig:fig2}Urban population (% of total population)"}
+ggplot(dataSubset,aes(x=SP.URB.TOTL.IN.ZS,y=EN.ATM.CO2E.PC))+geom_point(shape=19)+geom_smooth(method="lm")
+```
+
+```{r fig3, echo=FALSE, fig.cap="\\label{fig:fig3}Energy use (kg of oil equivalent per capita)"}
+ggplot(dataSubset,aes(x=EG.USE.PCAP.KG.OE,y=EN.ATM.CO2E.PC))+geom_point(shape=19)+geom_smooth(method="lm")
+```
+
+```{r fig4, echo=FALSE, fig.cap="\\label{fig:fig4}Electricity production from non-renewable sources (% of total)"}
+ggplot(dataSubset,aes(x=sum,y=EN.ATM.CO2E.PC))+geom_point(shape=19)+geom_smooth(method="lm")
+```
+
+```{r fig5, echo=FALSE, fig.cap="\\label{fig:fig5}Plot of Residuals Against Fitted Values"}
+cv.model2 <- lm(EN.ATM.CO2E.PC~., data = dataSubset)
+plot(cv.model2, which=1)
+```
+
+```{r fig6, echo=FALSE, fig.cap="\\label{fig:fig6}Plot of MSE's for the Lasso Model"}
+plot(cv_lasso)
+```
+
+```{r fig7, echo=FALSE, fig.cap="\\label{fig:fig7}Plot of MSE's for the Ridge Regression Model"}
+plot(cv_ridge)
+```
+
+
